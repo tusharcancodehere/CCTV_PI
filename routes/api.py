@@ -20,8 +20,8 @@ logger = logger_service.get_logger("api")
 def get_status():
     """Get system status."""
     stats = system_monitor.get_stats(
-        camera_connected=camera_manager.connected,
-        camera_resolution=camera_manager.resolution
+        camera_connected=camera_manager.connected if camera_manager else False,
+        camera_resolution=camera_manager.resolution if camera_manager else [640, 480]
     )
     
     return jsonify({
@@ -232,7 +232,7 @@ def get_snapshot_file(filename):
     """Serve a saved snapshot file."""
     try:
         from flask import send_from_directory
-        from config import config
+        from config.system_config import config
         # Security check: prevent directory traversal
         if "/" in filename or "\\" in filename or ".." in filename:
             return "Invalid filename", 400

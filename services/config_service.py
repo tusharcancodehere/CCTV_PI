@@ -4,7 +4,7 @@ import json
 from pathlib import Path
 from typing import Dict, Any, Optional
 
-from config import config
+from config.system_config import config
 
 
 class ConfigService:
@@ -55,6 +55,7 @@ class ConfigService:
             "theme": "dark",
             "auto_record": False,
             "record_quality": "medium",
+            "mirror_preview": config.MIRROR_PREVIEW,
         }
     
     def save_settings(self, settings: Dict[str, Any]) -> bool:

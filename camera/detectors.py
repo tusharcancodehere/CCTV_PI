@@ -5,6 +5,8 @@ import numpy as np
 from typing import Tuple, List, Optional
 from dataclasses import dataclass
 
+from config.system_config import config
+
 
 @dataclass
 class Detection:
@@ -24,11 +26,11 @@ class MotionDetector:
     
     def detect(self, frame: np.ndarray) -> Tuple[bool, float]:
         """Detect motion in frame."""
-        if self.prev_frame is None:
-            self.prev_frame = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
-            return False, 0.0
-        
         current = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+        
+        if self.prev_frame is None or self.prev_frame.shape != current.shape:
+            self.prev_frame = current
+            return False, 0.0
         
         # Frame differencing
         diff = cv2.absdiff(self.prev_frame, current)

@@ -9,7 +9,7 @@ from pathlib import Path
 
 import numpy as np
 
-from config import config
+from config.system_config import config
 from services.storage import storage_service
 from services.logger import logger_service
 

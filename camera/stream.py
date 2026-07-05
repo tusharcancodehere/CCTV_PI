@@ -8,7 +8,7 @@ import time
 
 import numpy as np
 
-from config import config
+from config.system_config import config
 from camera.overlays import HUDRenderer
 
 
@@ -48,6 +48,7 @@ class StreamGenerator:
         self.recording = False
         self.face_detections = []
         self.motion_data = None
+        self.mirror_preview = config.MIRROR_PREVIEW
     
     def update_frame(self, frame: np.ndarray, fps: float = 30) -> None:
         """Update the current frame to be streamed."""
@@ -55,6 +56,10 @@ class StreamGenerator:
             return
         
         with self.lock:
+            # Apply display mirror if enabled (doesn't modify original frame reference for recordings)
+            if self.mirror_preview:
+                frame = cv2.flip(frame, 1)
+            
             # Add HUD overlay in-place (no numpy copy to save RAM/CPU)
             timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
             self.hud.render_hud(

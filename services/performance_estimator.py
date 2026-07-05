@@ -5,7 +5,7 @@ from pathlib import Path
 from typing import Dict, Any, Tuple
 import psutil
 
-from config import config
+from config.system_config import config
 
 
 class PerformanceEstimator:

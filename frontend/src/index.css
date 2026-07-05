@@ -1,0 +1,142 @@
+/* ── Google Fonts (must be first) ────────────────────────────────────────── */
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap');
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* ── Design tokens ────────────────────────────────────────────────────────── */
+:root {
+  --bg:          #0d0e11;
+  --surface:     #13151a;
+  --surface-2:   #1a1d24;
+  --border:      #282c36;
+  --border-2:    #343844;
+  --text:        #e2e4ea;
+  --text-muted:  #6b7280;
+  --text-dim:    #3f4451;
+  --accent:      #5b7fff;
+  --accent-2:    #7c63f5;
+  --green:       #22c55e;
+  --red:         #ef4444;
+  --yellow:      #f59e0b;
+  --radius:      10px;
+  --radius-lg:   14px;
+}
+
+/* ── Base reset ───────────────────────────────────────────────────────────── */
+*, *::before, *::after { box-sizing: border-box; }
+
+html { font-size: 14px; }
+
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--text);
+  font-family: 'Inter', system-ui, -apple-system, sans-serif;
+  -webkit-font-smoothing: antialiased;
+  overflow: hidden;
+}
+
+/* ── Scrollbar ────────────────────────────────────────────────────────────── */
+::-webkit-scrollbar { width: 4px; height: 4px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: var(--border-2); border-radius: 4px; }
+::-webkit-scrollbar-thumb:hover { background: var(--text-dim); }
+
+/* ── Reusable component classes ───────────────────────────────────────────── */
+@layer components {
+
+  /* Surface card */
+  .card {
+    @apply rounded-[10px] border bg-[#13151a] border-[#282c36];
+  }
+
+  /* Inset / elevated surface */
+  .card-2 {
+    @apply rounded-[10px] border bg-[#1a1d24] border-[#343844];
+  }
+
+  /* Pill badge */
+  .badge {
+    @apply inline-flex items-center gap-1.5 rounded-full px-2.5 py-0.5
+           text-[11px] font-semibold tracking-wide border;
+  }
+  .badge-green  { @apply bg-green-500/10  text-green-400  border-green-500/20; }
+  .badge-red    { @apply bg-red-500/10    text-red-400    border-red-500/20; }
+  .badge-blue   { @apply bg-blue-500/10   text-blue-400   border-blue-500/20; }
+  .badge-yellow { @apply bg-yellow-500/10 text-yellow-400 border-yellow-500/20; }
+
+  /* Mono font */
+  .mono { font-family: 'JetBrains Mono', monospace; }
+
+  /* Sidebar nav item */
+  .nav-item {
+    @apply flex items-center gap-3 px-3 py-2 rounded-[8px] text-[13px]
+           font-medium text-[#6b7280] cursor-pointer transition-all duration-150
+           hover:bg-[#1a1d24] hover:text-[#e2e4ea];
+  }
+  .nav-item-active {
+    @apply bg-[#1a1d24] text-[#e2e4ea] border border-[#343844];
+  }
+
+  /* Button variants */
+  .btn {
+    @apply inline-flex items-center gap-2 rounded-[8px] px-4 py-2 text-[13px]
+           font-medium transition-all duration-150 cursor-pointer select-none;
+  }
+  .btn-primary {
+    @apply btn bg-[#5b7fff] text-white hover:bg-[#4a6fff] active:scale-[0.98];
+  }
+  .btn-ghost {
+    @apply btn bg-transparent text-[#6b7280] hover:bg-[#1a1d24] hover:text-[#e2e4ea]
+           border border-[#282c36] hover:border-[#343844];
+  }
+  .btn-danger {
+    @apply btn bg-red-500/10 text-red-400 border border-red-500/20
+           hover:bg-red-500/20;
+  }
+
+  /* Stat card */
+  .stat-card {
+    @apply card p-4 flex flex-col gap-3;
+  }
+
+  /* Input */
+  .input {
+    @apply w-full rounded-[8px] bg-[#1a1d24] border border-[#282c36]
+           px-3 py-2 text-[13px] text-[#e2e4ea] placeholder-[#3f4451]
+           focus:outline-none focus:border-[#5b7fff] transition-colors;
+  }
+}
+
+/* ── Animations ───────────────────────────────────────────────────────────── */
+@keyframes pulse-dot {
+  0%, 100% { opacity: 1; }
+  50%       { opacity: 0.3; }
+}
+.pulse-dot { animation: pulse-dot 1.4s ease-in-out infinite; }
+
+@keyframes shimmer {
+  0%   { background-position: -200% 0; }
+  100% { background-position:  200% 0; }
+}
+.skeleton {
+  background: linear-gradient(90deg,
+    var(--surface) 25%,
+    var(--surface-2) 50%,
+    var(--surface) 75%
+  );
+  background-size: 200% 100%;
+  animation: shimmer 1.4s ease-in-out infinite;
+  border-radius: var(--radius);
+}
+
+@keyframes fade-in {
+  from { opacity: 0; transform: translateY(4px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+.fade-in { animation: fade-in 0.2s ease-out; }
+
+/* ── Scrollable containers ────────────────────────────────────────────────── */
+.scroll-y { overflow-y: auto; }

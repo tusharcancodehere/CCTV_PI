@@ -1,154 +1,275 @@
-# OpenCV Vision Edge: Production-Grade IoT Camera Streaming System
+# VisionCV — OpenCV Vision Dashboard
 
-An ultra-low resource, highly reliable, and self-healing real-time camera streaming and computer vision pipeline optimized for Raspberry Pi and Linux edge devices.
+> A production-grade, real-time computer vision dashboard built with Flask, OpenCV, and React.
+
+![Python](https://img.shields.io/badge/Python-3.10%2B-blue?logo=python)
+![Flask](https://img.shields.io/badge/Flask-3.x-black?logo=flask)
+![OpenCV](https://img.shields.io/badge/OpenCV-4.x-green?logo=opencv)
+![React](https://img.shields.io/badge/React-18-61DAFB?logo=react)
+![TailwindCSS](https://img.shields.io/badge/TailwindCSS-3.x-38BDF8?logo=tailwindcss)
+![License](https://img.shields.io/badge/License-MIT-yellow)
 
 ---
 
-## 1. System Overview
+## Overview
 
-OpenCV Vision Edge is a production-ready edge vision server that captures, processes, and streams real-time video feeds with negligible resource footprints. Designed to operate continuously on resource-constrained hardware such as the Raspberry Pi 4/5 (1GB RAM) as well as Linux desktops, the system implements a strict single-frame lifecycle to achieve deterministic latency, avoid memory leaks, and eliminate frame queue buildup. 
-
-The web-based dashboard displays live stream feeds, tracks event logs, lists captures, and charts system telemetry (CPU, RAM, Core Temperature, and Pipeline FPS) updated dynamically based on view status.
+VisionCV streams a live MJPEG camera feed to a modern SaaS-style web dashboard. It includes an adaptive performance engine that dynamically adjusts resolution and frame rate based on host CPU load, motion and face detection, JPEG quality controls, and a real-time analytics view — all configurable from the browser.
 
 ---
 
-## 2. Real-Time Architecture
+## Features
 
-The architecture enforces a strict decoupling of concerns across a multi-layered design:
+| Area | Details |
+|------|---------|
+| **Streaming** | MJPEG over HTTP — works in any browser with zero plugins |
+| **Adaptive Engine** | Auto-scales FPS and quality based on CPU load |
+| **Detectors** | Motion (frame diff), Face (Haar cascade), QR (OpenCV) |
+| **Recording** | MP4 video capture to disk |
+| **Snapshots** | JPEG frame capture with storage management |
+| **Analytics** | Live graphs — FPS, CPU, RAM, temperature (Recharts) |
+| **Settings** | Resolution, FPS, JPEG quality — applied without restart |
+| **Offline mode** | Boots cleanly if no camera is attached; shows placeholder |
+| **Raspberry Pi** | Auto-detects Pi and drops to 480p/15fps defaults |
+
+---
+
+## Architecture
 
 ```
-[ Camera Hardware ] 
-       │ (Picamera2 / OpenCV Capture)
-       ▼
-[ Camera Pipeline (camera/manager.py) ] ── (Single-Frame Overwrite)
-       │ 
-       ▼
-[ Processing Layer (detectors.py, overlays.py) ] ── (In-place Drawing / Downsizer)
-       │
-       ▼
-[ Streaming Handler (stream.py) ] ── (Single JPEG pre-encoding / Condition Variable)
-       │
-       ▼
-[ Flask HTTP Layer (routes/streaming.py) ] ── (Stateless Multiclient yield)
-       │
-       ▼
-[ Frontend Web Dashboard (static/js/app.js) ] ── (Lazy Tab Polling / Static Snapshots)
+┌────────────────────────────────────────────────────────────────┐
+│  Browser                                                       │
+│  React (Vite) + TailwindCSS + Zustand + Recharts              │
+│     │                                                          │
+│     │ HTTP / MJPEG                                             │
+│     ▼                                                          │
+│  Flask (app.py)                                                │
+│  ├── routes/dashboard.py     → serves React SPA               │
+│  ├── routes/api.py           → JSON API                       │
+│  └── routes/streaming.py     → /api/stream (MJPEG)            │
+│                                                                │
+│  camera/                                                       │
+│  ├── manager.py    CameraManager singleton                     │
+│  ├── stream.py     MJPEG frame generator (condition var)       │
+│  ├── detectors.py  Motion / Face / QR                          │
+│  ├── controls.py   Brightness / Contrast / Flip               │
+│  ├── adaptive.py   CPU-based performance brain                 │
+│  ├── recorder.py   MP4 writer                                  │
+│  └── snapshots.py  JPEG capture                               │
+│                                                                │
+│  services/                                                     │
+│  ├── analytics.py  Ring-buffer metrics + watchdog              │
+│  ├── logger.py     Centralised logging                         │
+│  ├── storage.py    File management                             │
+│  └── watchdog.py   Camera recovery (max 3 restarts/min)       │
+│                                                                │
+│  config/                                                       │
+│  ├── system_config.py   Server + path constants                │
+│  └── camera_config.py  Camera hardware defaults               │
+└────────────────────────────────────────────────────────────────┘
 ```
 
-### Core Execution Design
-1. **Producer-Consumer Model**: A dedicated capture thread polls the camera hardware continuously, updating a single reference to the latest frame.
-2. **Single-Frame Lifecycle**: Raw frames are modified in-place with HUD overlays to prevent memory allocation overhead and garbage collection churn. No queues or buffers are used. Old frames are immediately overwritten and discarded.
-3. **Pre-Encoded Shared Buffers**: Frames are encoded to JPEG exactly *once* in the capture thread. Connected HTTP streaming workers block using a thread-safe `threading.Condition` variable and yield the pre-encoded bytes to clients, preventing per-client encoding duplication.
-
 ---
 
-## 3. Features
-
-### Streaming Features
-* **Stateless MJPEG Distribution**: High-efficiency HTTP video feed serving multiple concurrent clients without CPU degradation.
-* **Shared Cached Frame Output**: Subscribing workers stream from the same pre-encoded buffer, eliminating CPU encoding bottlenecks.
-* **Emergency Placeholder Frame**: Automatically renders a dynamic "CAMERA OFFLINE" image with timestamps if hardware captures are interrupted.
-
-### AI / Vision Features
-* **Frame-Differenced Motion Detection**: Lightweight motion evaluation using frame difference matrices.
-* **Face Detection**: Haar Cascade classifier optimized for embedded hardware.
-* **QR Code Decodification**: Integrated QR code detection and reading.
-* **Internal Resolution Scaling**: Image buffers downscale to a configurable target width (`320px` to `640px`) before classification to maintain stable processing frame rates.
-
-### System Reliability Features
-* **Auto-Reconnection Retry Loop**: If a camera is unplugged or `/dev/video0` is locked on boot, a background thread retries hardware initialization every 10 seconds.
-* **Watchdog Frame Verification**: Monitors frame sequence numbers and automatically restarts the capture loop if frames stall for more than 5 seconds.
-* **Daemon thread control**: Start, stop, and restart operations are serialized under a lifecycle lock, preventing duplicate threads and deadlocks.
-* **Process Exit Cleanup**: Uses the python `atexit` module to cleanly release hardware and terminate child threads on process shutdowns.
-
-### Performance Features
-* **Adaptive FPS Throttling**: Capture loop dynamically skips frame processing (reads and discards raw buffers to clear OS camera cache) if average CPU usage exceeds `60%`, `75%`, or `90%`.
-* **Dynamic Pi Optimization**: Auto-tunes resolution to `640x480` and limits FPS to `15` when a Raspberry Pi is detected.
-* **Lazy UI Polling**: The frontend dashboard pauses background status, log, and snapshot AJAX calls if their respective tabs are inactive.
-
----
-
-## 4. Performance Design
-
-To ensure continuous execution over 24 to 72 hours, the codebase employs the following optimizations:
-
-* **Sustained Load Throttling**: Rather than reacting to transient spikes, the throttling logic measures a moving average CPU percentage to adjust frame skips and toggle detectors.
-* **Memory Growth Prevention**: Historical metrics in `analytics.py` are capped strictly between 30 and 60 entries using ring buffers (`collections.deque` with `maxlen`). Snapshot and recording directories returned as JSON are capped to the 100 most recent items to avoid API payload bloating.
-* **Periodic Garbage Collection**: Explicitly triggers `gc.collect()` in the background analytics loop every 30 seconds to reclaim memory blocks and combat fragmentation.
-* **Non-Blocking Telemetry**: Replaced blocking `psutil` CPU percent queries with immediate, non-blocking calls (`interval=None`), eliminating Flask route latency.
-
----
-
-## 5. System Requirements
-
-* **Hardware**: Raspberry Pi 4/5 (1GB RAM minimum) or standard x86/ARM Linux laptops.
-* **Operating System**: Raspberry Pi OS, Ubuntu, Debian, or Arch Linux.
-* **Python**: Version 3.9, 3.10, or 3.11.
-
----
-
-## 6. Tech Stack
-
-* **Core**: Python 3
-* **Web Server**: Flask
-* **Computer Vision**: OpenCV (headless optimized for Pi)
-* **Matrix Operations**: NumPy
-* **System Telemetry**: psutil
-* **Image Processing**: Pillow
-
----
-
-## 7. Installation
-
-The installation is fully automated via `setup.sh`, which detects your operating system, configures a virtual environment, installs system libraries, compiles/installs Python dependencies, and runs step-by-step checks.
+## Quick Start
 
 ```bash
-# Clone the repository
-git clone https://github.com/tusharcancodehere/CCTV_PI.git
-cd CCTV_PI
+# 1. Clone
+git clone https://github.com/yourname/FUN_WITH_CV.git
+cd FUN_WITH_CV
 
-# Make installer executable
-chmod +x setup.sh
-
-# Run the installer (requires sudo for apt packages)
+# 2. Setup (installs system deps + Python venv + Node deps)
+chmod +x setup.sh run.sh verify.sh
 ./setup.sh
+
+# 3. Launch everything
+./run.sh
+```
+
+Open **http://localhost:8888**
+
+---
+
+## Requirements
+
+| Dependency | Version |
+|------------|---------|
+| Python | 3.10+ |
+| Node.js | 18+ |
+| npm | 9+ |
+| OpenCV | 4.8+ |
+| Camera device | `/dev/video0` or Pi Camera |
+
+---
+
+## Installation (manual)
+
+```bash
+# Create venv
+python3 -m venv venv
+source venv/bin/activate
+
+# Install Python deps
+pip install -r requirements.txt
+
+# Install and build frontend
+cd frontend
+npm install
+npm run build
+cd ..
+
+# Start backend
+python app.py
 ```
 
 ---
 
-## 8. Usage
+## Configuration
 
-1. Run the installation script to start the server, or run the app manually:
-   ```bash
-   source venv/bin/activate
-   python app.py
-   ```
-2. Open your browser and navigate to:
-   ```
-   http://localhost:8888
-   ```
-3. Use the web interface to view the live feed, adjust brightness/contrast, start MP4 video recording, or capture snapshot images.
-4. Settings, performance estimator evaluations, and system diagnostic logs are available under their respective tabs.
+All runtime configuration lives in `config/system_config.py`:
 
----
+```python
+HOST          = "0.0.0.0"   # bind address
+PORT          = 8888         # HTTP port
+CAMERA_FPS    = 30           # starting FPS
+CAMERA_RESOLUTION = (1280, 720)
+MJPEG_QUALITY = 80           # 1–95 JPEG quality
+```
 
-## 9. Use Cases
-
-* **Edge CCTV Camera**: Deployment on remote low-power Raspberry Pi hardware as a surveillance camera.
-* **Robotics Vision Feed**: Real-time video processing pipeline for mobile robotics or automated vehicles.
-* **Edge AI Prototype**: A foundation for embedding more complex object classifiers or models without UI blocking.
-* **System Diagnostics Dashboard**: General-purpose hardware telemetry monitoring system.
+Settings can also be changed at runtime via the Settings tab in the UI, which calls `POST /api/settings`.
 
 ---
 
-## 10. Performance Notes
+## API Reference
 
-* **Zero Queue Design**: Traditional queues buffer frames when clients get slow, leading to memory growth and stream lag. This system utilizes a condition variable to notify clients immediately, dropping frames automatically if a client's thread is blocked.
-* **Single-Frame Overwrite**: Python memory allocations are kept low by reusing a single variable reference for the raw capture frame. No history is kept in memory.
-* **Capped Log Ring Buffers**: System diagnostics log events are pushed to a `RingBuffer` capped at 100 entries, preventing memory expansion.
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| `GET`  | `/api/status` | System health (CPU, RAM, FPS, OpenCV version) |
+| `GET`  | `/api/camera/status` | Camera state + resolution + frame count |
+| `POST` | `/api/camera/restart` | Restart the camera pipeline |
+| `GET`  | `/api/stream` | **MJPEG live stream** |
+| `GET`  | `/snapshot` | Current frame as JPEG |
+| `POST` | `/snapshot/capture` | Save snapshot to disk |
+| `POST` | `/recording/start` | Begin MP4 recording |
+| `POST` | `/recording/stop` | Stop recording + return file path |
+| `GET`  | `/api/analytics` | Historical FPS/CPU/RAM data |
+| `GET`  | `/api/logs?limit=N` | Recent log entries |
+| `GET`  | `/api/settings` | Current settings |
+| `POST` | `/api/settings` | Update settings (applied live) |
+| `GET`  | `/api/health` | Simple health-check (`{"status":"healthy"}`) |
 
 ---
 
-## 11. Final Summary
+## Folder Structure
 
-OpenCV Vision Edge is a production-grade edge vision streaming system designed from the ground up for low-memory efficiency and long-term deployment reliability on embedded edge hardware.
+```
+FUN_WITH_CV/
+├── app.py                  # Flask entry point
+├── run.sh                  # One-command launcher
+├── setup.sh                # Environment installer
+├── verify.sh               # Health checker
+├── requirements.txt        # Python deps
+│
+├── config/
+│   ├── system_config.py    # Server constants
+│   └── camera_config.py    # Camera defaults
+│
+├── camera/                 # Camera pipeline
+│   ├── manager.py
+│   ├── stream.py
+│   ├── adaptive.py
+│   ├── detectors.py
+│   ├── controls.py
+│   ├── recorder.py
+│   ├── snapshots.py
+│   └── overlays.py
+│
+├── routes/                 # Flask blueprints
+│   ├── api.py
+│   ├── dashboard.py
+│   └── streaming.py
+│
+├── services/               # Background services
+│   ├── analytics.py
+│   ├── logger.py
+│   ├── watchdog.py
+│   └── storage.py
+│
+├── frontend/               # React app (Vite)
+│   ├── src/
+│   │   ├── App.jsx
+│   │   ├── index.css       # Design system
+│   │   ├── components/
+│   │   └── store/
+│   └── tailwind.config.js
+│
+├── static/                 # Compiled frontend assets
+├── templates/              # Flask HTML templates
+├── logs/                   # Runtime logs
+├── recordings/             # MP4 recordings
+└── snapshots/              # JPEG snapshots
+```
+
+---
+
+## Scripts
+
+### `./run.sh`
+Starts the full stack: kills stale processes, launches Flask, waits for readiness, builds React, runs verification.
+
+### `./setup.sh`
+Installs system packages (Arch / Debian), creates venv, installs Python and Node deps.
+
+### `./verify.sh`
+Read-only diagnostics: Python version, camera device, API health, frontend assets. Never installs anything.
+
+---
+
+## Troubleshooting
+
+**Camera not detected**
+```bash
+ls /dev/video*          # check device exists
+sudo usermod -aG video $USER   # add yourself to video group
+```
+
+**Port 8888 already in use**
+```bash
+./run.sh               # automatically kills the stale process
+```
+
+**Frontend shows blank page**
+```bash
+cd frontend && npm run build   # rebuild assets
+```
+
+**Backend fails to start**
+```bash
+cat logs/backend.log   # run.sh prints this automatically on failure
+```
+
+---
+
+## Roadmap
+
+- [ ] WebSocket streaming (lower latency)
+- [ ] YOLO object detection integration
+- [ ] Multi-camera switching
+- [ ] JWT authentication
+- [ ] Docker + Docker Compose
+- [ ] Prometheus metrics export
+- [ ] Timeline-based recording browser
+
+---
+
+## Contributing
+
+1. Fork the repository
+2. Create a feature branch (`git checkout -b feat/my-feature`)
+3. Run `./verify.sh` before committing
+4. Open a pull request
+
+---
+
+## License
+
+MIT — see `LICENSE` for details.

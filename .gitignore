@@ -1,48 +1,75 @@
-# Virtual environment
-venv/
-env/
-ENV/
-
-# Python
+# ── Python ───────────────────────────────────────────────────────────────────
 __pycache__/
 *.py[cod]
 *$py.class
 *.so
+*.pyd
 .Python
+*.egg
+*.egg-info/
+dist/
+build/
+eggs/
+parts/
+var/
+sdist/
+wheels/
+pip-wheel-metadata/
+share/python-wheels/
+MANIFEST
+log
 
-# IDEs
+# ── Virtual environments ──────────────────────────────────────────────────────
+venv/
+env/
+ENV/
+.venv/
+.env
+.env.local
+.env.*.local
+
+# ── Node / frontend ───────────────────────────────────────────────────────────
+node_modules/
+frontend/dist/
+frontend/.vite/
+frontend/node_modules/
+
+# ── Generated static assets (created by Vite build + run.sh copy) ────────────
+static/assets/
+
+# ── Runtime / generated files ────────────────────────────────────────────────
+*.pid
+.backend.pid
+logs/
+*.log
+
+# ── Camera output ────────────────────────────────────────────────────────────
+recordings/
+snapshots/
+cache/
+
+# ── IDEs ──────────────────────────────────────────────────────────────────────
 .vscode/
 .idea/
 *.swp
 *.swo
 *~
-.DS_Store
 
-# Logs
-logs/
-*.log
-
-# Recordings and snapshots
-recordings/
-snapshots/
-
-# Cache
-cache/
-__pycache__/
-
-# Environment
-.env
-.env.local
-
-# OS
+# ── OS ───────────────────────────────────────────────────────────────────────
 .DS_Store
 Thumbs.db
+Desktop.ini
 
-# Testing
+# ── Testing ───────────────────────────────────────────────────────────────────
 .pytest_cache/
 .coverage
+htmlcov/
+.tox/
 
-# Build
-dist/
-build/
-*.egg-info/
+# ── AI / model weights (large binaries) ──────────────────────────────────────
+models/
+ai/
+*.pt
+*.pth
+*.onnx
+*.weights

@@ -5,7 +5,7 @@ from datetime import datetime
 from pathlib import Path
 from typing import List, Dict, Any
 
-from config import config
+from config.system_config import config
 
 
 class StorageService:

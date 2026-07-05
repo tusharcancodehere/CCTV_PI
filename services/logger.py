@@ -9,7 +9,7 @@ from typing import List, Dict, Any
 import time
 import threading
 
-from config import config, LogLevel
+from config.system_config import config, LogLevel
 
 
 class DuplicateFilter(logging.Filter):

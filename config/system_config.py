@@ -57,6 +57,8 @@ class AppConfig:
     MJPEG_QUALITY: int = 80
     MJPEG_BUFFER_SIZE: int = 1
     STREAMING_FPS: int = 30
+    MIRROR_PREVIEW: bool = True
+
     
     # Analytics
     ANALYTICS_BUFFER_SIZE: int = 60

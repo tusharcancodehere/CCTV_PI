@@ -1,7 +1,7 @@
 #!/bin/bash
 
 # OpenCV Vision Dashboard - Production Setup & Deployment Script
-# Supports: Raspberry Pi 4/5, Debian, Ubuntu, Linux Laptops
+# Supports: Raspberry Pi 4/5, Debian, Ubuntu, Arch Linux, Linux Laptops
 
 set -eo pipefail
 
@@ -24,7 +24,7 @@ if [ -f /etc/os-release ]; then
     OS_NAME=$NAME
     OS_ID=$ID
 else
-    echo -e "${RED}✗ Error: Cannot detect operating system. Only Debian/Ubuntu-based systems are supported.${NC}"
+    echo -e "${RED}✗ Error: Cannot detect operating system.${NC}"
     exit 1
 fi
 
@@ -42,50 +42,32 @@ if [ "$IS_PI" = false ]; then
 fi
 echo -e "${GREEN}✓ OS Detected: $OS_NAME ($OS_ID)${NC}"
 
-# Verify we are on a supported Debian/Ubuntu based OS
-if [[ "$OS_ID" != "ubuntu" && "$OS_ID" != "debian" && "$OS_ID" != "raspbian" ]]; then
-    echo -e "${YELLOW}! Warning: Unsupported OS ID '$OS_ID'. Setup will proceed but might fail.${NC}"
-fi
-
 # 2. System Dependency Installation
 echo -e "\n${BLUE}» Installing System Dependencies (requires sudo privilege)...${NC}"
 
-# Update apt repositories
-sudo apt-get update -y
+if [[ "$OS_ID" == "ubuntu" || "$OS_ID" == "debian" || "$OS_ID" == "raspbian" ]]; then
+    sudo apt-get update -y
+    SYS_PACKAGES=(python3 python3-pip python3-venv build-essential cmake git libopencv-dev libatlas-base-dev libjpeg-dev libpng-dev v4l-utils)
+    if [ "$OS_ID" = "debian" ] || [ "$OS_ID" = "raspbian" ]; then
+        SYS_PACKAGES+=(libtiff-dev)
+    else
+        SYS_PACKAGES+=(libtiff5-dev)
+    fi
+    if [ "$IS_PI" = true ]; then
+        SYS_PACKAGES+=(libcamera-dev libcamera-apps-lite python3-picamera2 nodejs npm)
+    else
+        SYS_PACKAGES+=(nodejs npm)
+    fi
+    for pkg in "${SYS_PACKAGES[@]}"; do
+        sudo apt-get install -y "$pkg" || echo -e "${YELLOW}! Failed to install $pkg${NC}"
+    done
 
-SYS_PACKAGES=(
-    python3
-    python3-pip
-    python3-venv
-    build-essential
-    cmake
-    git
-    libopencv-dev
-    libatlas-base-dev
-    libjpeg-dev
-    libpng-dev
-    v4l-utils
-)
-
-# Handle OS specific libraries
-if [ "$OS_ID" = "debian" ] || [ "$OS_ID" = "raspbian" ]; then
-    # Debian uses libtiff-dev rather than libtiff5-dev in newer packages
-    SYS_PACKAGES+=(libtiff-dev)
+elif [[ "$OS_ID" == "arch" || "$OS_ID" == "manjaro" || "$OS_ID" == "endeavouros" ]]; then
+    SYS_PACKAGES=(python python-pip python-virtualenv base-devel cmake git opencv hdf5 v4l-utils nodejs npm)
+    sudo pacman -Sy --noconfirm --needed "${SYS_PACKAGES[@]}" || echo -e "${YELLOW}! Pacman install failed${NC}"
 else
-    SYS_PACKAGES+=(libtiff5-dev)
+    echo -e "${YELLOW}! Warning: Unsupported OS '$OS_ID'. Please install python, pip, venv, opencv, and nodejs manually.${NC}"
 fi
-
-# Add Pi specific camera packages
-if [ "$IS_PI" = true ]; then
-    echo -e "${BLUE}» Adding Raspberry Pi camera system dependencies...${NC}"
-    SYS_PACKAGES+=(libcamera-dev libcamera-apps-lite)
-fi
-
-# Install packages
-for pkg in "${SYS_PACKAGES[@]}"; do
-    echo -e "Installing $pkg..."
-    sudo apt-get install -y "$pkg" || echo -e "${YELLOW}! Failed to install $pkg, trying to continue...${NC}"
-done
 
 print_success() {
     echo -e "${GREEN}✓ $1${NC}"
@@ -93,174 +75,153 @@ print_success() {
 
 print_success "System dependencies verification complete"
 
-# 3. Directory Structures Setup
-echo -e "\n${BLUE}» Creating Project Folders & Setting Permissions...${NC}"
-REQUIRED_DIRS=(
-    camera
-    services
-    routes
-    static/css
-    static/js
-    templates
-    logs
-    snapshots
-    recordings
-    cache
-)
+# Check camera permissions
+echo -e "\n${BLUE}» Verifying Camera Permissions...${NC}"
+if groups $USER | grep -q '\bvideo\b'; then
+    print_success "User is in 'video' group."
+else
+    echo -e "${YELLOW}! User is not in 'video' group. Adding...${NC}"
+    sudo usermod -aG video $USER
+    echo -e "${YELLOW}! You may need to log out and back in for permissions to apply.${NC}"
+fi
+
+# 3. Directory Structures & .env
+echo -e "\n${BLUE}» Creating Project Folders & Files...${NC}"
+REQUIRED_DIRS=(camera services routes static/css static/js static/assets templates logs snapshots recordings cache)
 
 for dir in "${REQUIRED_DIRS[@]}"; do
-    if [ ! -d "$dir" ]; then
-        mkdir -p "$dir"
-        echo -e "Created folder: $dir"
-    fi
+    mkdir -p "$dir"
 done
-
-# Ensure logs, snapshot and recording directories are writable
 chmod -R 775 logs snapshots recordings cache || true
-print_success "Directories configured successfully"
+
+if [ ! -f .env ]; then
+    if [ -f .env.example ]; then
+        cp .env.example .env
+        print_success "Created .env from .env.example"
+    else
+        touch .env
+        print_success "Created blank .env"
+    fi
+else
+    print_success ".env already exists"
+fi
+
+# Make scripts executable
+chmod +x run.sh setup.sh verify.sh
+
+print_success "Directories and files configured successfully"
 
 # 4. Python Virtual Environment Setup
 echo -e "\n${BLUE}» Setting up Python Virtual Environment...${NC}"
 VENV_DIR="venv"
 
 if [ ! -d "$VENV_DIR" ]; then
-    python3 -m venv "$VENV_DIR"
-    print_success "Virtual environment created in ./$VENV_DIR"
-else
-    echo -e "${GREEN}✓ Existing virtual environment found.${NC}"
+    if command -v python3 &>/dev/null; then
+        python3 -m venv "$VENV_DIR"
+    else
+        python -m venv "$VENV_DIR"
+    fi
+    print_success "Virtual environment created"
 fi
 
-# Activate venv
 source "$VENV_DIR"/bin/activate
-
-# Upgrade pip
-echo -e "Upgrading pip inside venv..."
 pip install --upgrade pip
 
-# Install Python requirements with retry logic
 echo -e "\n${BLUE}» Installing Python Packages...${NC}"
+PYTHON_DEPS=(flask==3.0.0 numpy==1.24.3 psutil==5.9.5 pillow==10.0.0 python-dotenv==1.0.0)
 
-# Core dependencies list
-PYTHON_DEPS=(
-    flask==3.0.0
-    numpy==1.24.3
-    psutil==5.9.5
-    pillow==10.0.0
-    python-dotenv==1.0.0
-)
-
-# Standard desktop vs Pi OpenCV handling
 if [ "$IS_PI" = true ]; then
-    # Low-resource Pi uses precompiled opencv-python-headless for speed/RAM
     PYTHON_DEPS+=(opencv-python-headless==4.8.1.78)
 else
     PYTHON_DEPS+=(opencv-python==4.8.1.78)
 fi
 
-# Install function with retry
 install_with_retry() {
-    local max_retries=3
-    local count=1
+    local max=3 count=1
     until pip install "$@"; do
-        if [ $count -lt $max_retries ]; then
-            echo -e "${YELLOW}! Pip install failed. Retrying ($count/$max_retries)...${NC}"
-            sleep 2
-            ((count++))
+        if [ $count -lt $max ]; then
+            sleep 2; ((count++))
         else
-            echo -e "${RED}✗ Error: Pip installation failed after $max_retries attempts.${NC}"
             return 1
         fi
     done
     return 0
 }
 
-# Install packages
 for dep in "${PYTHON_DEPS[@]}"; do
-    echo -e "Installing $dep..."
-    install_with_retry "$dep"
+    install_with_retry "$dep" || echo -e "${YELLOW}! Failed to install $dep${NC}"
 done
 
-# Try installing picamera2 optionally if Pi
+# Try installing picamera2 optionally if Pi via pip if apt failed
 if [ "$IS_PI" = true ]; then
-    echo -e "Attempting to install picamera2 bindings..."
-    # First try via apt (recommended for Pi OS) or fallback to pip
-    sudo apt-get install -y python3-picamera2 || pip install picamera2 --no-deps || echo -e "${YELLOW}! Picamera2 bindings installation failed. Falling back to OpenCV backend.${NC}"
+    python3 -c "import picamera2" 2>/dev/null || pip install picamera2 --no-deps || true
 fi
 
-print_success "Python dependencies installed successfully"
+print_success "Python dependencies installed"
 
-# 5. Verification Phase
+# 5. Node.js & React Build
+echo -e "\n${BLUE}» Installing Frontend Dependencies...${NC}"
+if command -v npm &>/dev/null; then
+    if [ -d "frontend" ]; then
+        cd frontend
+        npm install --silent
+        print_success "NPM dependencies installed"
+        cd ..
+    fi
+else
+    echo -e "${YELLOW}! npm not found. Skipping frontend dependencies.${NC}"
+fi
+
+# 6. Verification Phase
 echo -e "\n${BLUE}==================================================${NC}"
 echo -e "${BLUE}            SYSTEM VERIFICATION & CHECKS          ${NC}"
 echo -e "${BLUE}==================================================${NC}"
 
 VERIFY_FAIL=0
 
-# Python version check
-PY_VER=$(python3 --version)
+PY_VER=$(python --version)
 print_success "Python Version: $PY_VER"
 
-# PIP check
-PIP_VER=$(pip --version | awk '{print $2}')
-print_success "Pip Version: $PIP_VER"
+if command -v node &>/dev/null; then
+    NODE_VER=$(node --version)
+    print_success "Node.js Version: $NODE_VER"
+else
+    echo -e "${RED}✗ Error: Node.js is missing.${NC}"
+    ((VERIFY_FAIL++))
+fi
 
-# OpenCV import test
-echo -e "Testing OpenCV package..."
-if python3 -c "import cv2; print('OpenCV Version:', cv2.__version__)" 2>/dev/null; then
+if python -c "import cv2" 2>/dev/null; then
     print_success "OpenCV installation verified"
 else
-    echo -e "${RED}✗ Error: OpenCV installation check failed.${NC}"
+    echo -e "${RED}✗ Error: OpenCV check failed.${NC}"
     ((VERIFY_FAIL++))
 fi
 
-# Flask import test
-echo -e "Testing Flask package..."
-if python3 -c "import flask; print('Flask Version:', flask.__version__)" 2>/dev/null; then
+if python -c "import flask" 2>/dev/null; then
     print_success "Flask installation verified"
 else
-    echo -e "${RED}✗ Error: Flask installation check failed.${NC}"
+    echo -e "${RED}✗ Error: Flask check failed.${NC}"
     ((VERIFY_FAIL++))
 fi
 
-# Camera hardware detection check
-echo -e "Checking camera device availability..."
 CAMERA_DETECTED=false
-if [ -c /dev/video0 ]; then
+if ls /dev/video* 1> /dev/null 2>&1 || [ "$IS_PI" = true ]; then
     CAMERA_DETECTED=true
-    print_success "Camera device found (/dev/video0)"
+    print_success "Camera device found or PiCamera interface available"
 else
-    echo -e "${YELLOW}! Warning: No standard video capture device found (/dev/video0). Make sure a USB camera is plugged in or Picamera interface is active.${NC}"
+    echo -e "${YELLOW}! Warning: No standard video capture device found (/dev/video*).${NC}"
 fi
 
-# RAM check
-TOTAL_RAM_KB=$(grep MemTotal /proc/meminfo | awk '{print $2}')
-TOTAL_RAM_MB=$((TOTAL_RAM_KB / 1024))
-print_success "Total System RAM: $TOTAL_RAM_MB MB"
-
-if [ "$TOTAL_RAM_MB" -lt 950 ]; then
-    echo -e "${YELLOW}! Warning: System RAM is low ($TOTAL_RAM_MB MB). Enforcing low-resource auto-tuning settings.${NC}"
-fi
-
-# Print installation results
 if [ "$VERIFY_FAIL" -eq 0 ]; then
     echo -e "\n${GREEN}==================================================${NC}"
     echo -e "${GREEN}    ✅ INSTALLATION VERIFIED & READY TO LAUNCH     ${NC}"
     echo -e "${GREEN}==================================================${NC}"
-    echo -e "\nSystem Summary:"
-    echo -e "  - Hardware:      $(uname -m) ($(uname -s))"
-    echo -e "  - Raspberry Pi:  $IS_PI"
-    echo -e "  - Camera Found:  $CAMERA_DETECTED"
-    echo -e "  - RAM Memory:    $TOTAL_RAM_MB MB"
-    echo -e "  - URL Address:   http://localhost:8888"
-    echo -e "--------------------------------------------------"
+    echo -e "You can now start the application by running:"
+    echo -e "  ${YELLOW}./run.sh${NC}"
 else
     echo -e "\n${RED}==================================================${NC}"
     echo -e "${RED}         ✗ VERIFICATION FAILED ($VERIFY_FAIL errors)       ${NC}"
     echo -e "${RED}==================================================${NC}"
-    echo -e "Please check the logs above, resolve the missing packages, and rerun setup.sh."
+    echo -e "Please check the logs above, resolve missing packages, and rerun setup.sh."
     exit 1
 fi
-
-# 6. Auto-Start App
-echo -e "\n${BLUE}» Starting OpenCV Vision Dashboard server...${NC}"
-python3 app.py

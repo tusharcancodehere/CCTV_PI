@@ -9,7 +9,7 @@ from typing import Dict, Any, Optional
 import psutil
 import cv2
 
-from config import config, CameraBackend
+from config.system_config import config, CameraBackend
 
 
 @dataclass

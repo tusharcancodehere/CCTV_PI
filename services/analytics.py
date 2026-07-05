@@ -6,7 +6,7 @@ from datetime import datetime
 from typing import Dict, List, Any
 import threading
 
-from config import config
+from config.system_config import config
 from services.logger import logger_service
 
 
@@ -76,13 +76,18 @@ class AnalyticsService:
             return
         
         self._initialized = True
-        capacity = config.ANALYTICS_BUFFER_SIZE
+        capacity = 900  # 15 minutes at 1Hz
         
         # Metrics buffers
         self.fps_history = MetricsBuffer(capacity)
         self.cpu_history = MetricsBuffer(capacity)
         self.ram_history = MetricsBuffer(capacity)
         self.temperature_history = MetricsBuffer(capacity)
+        self.gpu_history = MetricsBuffer(capacity)
+        self.latency_history = MetricsBuffer(capacity)
+        self.processing_time_history = MetricsBuffer(capacity)
+        self.detector_time_history = MetricsBuffer(capacity)
+        self.encoding_time_history = MetricsBuffer(capacity)
         
         # Counters
         self.snapshot_count = 0
@@ -155,6 +160,27 @@ class AnalyticsService:
                 if temp is not None:
                     self.record_temperature(temp)
                     
+                # GPU estimation
+                gpu = 0.0
+                try:
+                    import subprocess
+                    out = subprocess.check_output(["nvidia-smi", "--query-gpu=utilization.gpu", "--format=csv,noheader,nounits"], stderr=subprocess.DEVNULL, timeout=1.0)
+                    if out:
+                        gpu = float(out.decode().split('\n')[0].strip())
+                except Exception:
+                    pass
+                self.record_gpu(gpu)
+                
+                # Run Performance Engine
+                from services.performance_engine import performance_engine
+                from camera.manager import camera_manager
+                performance_engine.evaluate(
+                    cpu_usage=cpu,
+                    gpu_usage=gpu,
+                    fps=camera_manager.fps,
+                    target_fps=config.CAMERA_FPS
+                )
+                    
                 # 2. Watchdog and Auto-reconnection logic
                 now = time.time()
                 if camera_manager.should_run:
@@ -172,8 +198,8 @@ class AnalyticsService:
                             last_update = camera_manager.last_update_time
                             connected = camera_manager.connected
                         
-                        if connected and (now - last_update > 5.0):
-                            self.logger.warning("Camera stall detected (no frames for 5s) in watchdog. Triggering recovery...")
+                        if connected and (now - last_update > 15.0):
+                            self.logger.warning("Camera stall detected (no frames for 15s) in watchdog. Triggering recovery...")
                             threading.Thread(target=camera_manager._recover_camera, daemon=True).start()
                 
                 # 4. Storage cleanup once per hour
@@ -210,6 +236,17 @@ class AnalyticsService:
     def record_temperature(self, temp_c: float) -> None:
         """Record temperature metric."""
         self.temperature_history.add(temp_c)
+        
+    def record_gpu(self, gpu_percent: float) -> None:
+        """Record GPU metric."""
+        self.gpu_history.add(gpu_percent)
+        
+    def record_timing(self, latency: float, processing: float, detector: float, encoding: float) -> None:
+        """Record pipeline timings."""
+        self.latency_history.add(latency)
+        self.processing_time_history.add(processing)
+        self.detector_time_history.add(detector)
+        self.encoding_time_history.add(encoding)
     
     def increment_snapshots(self) -> None:
         """Increment snapshot counter."""
@@ -243,6 +280,15 @@ class AnalyticsService:
                 "cpu": self.cpu_history.get_all(),
                 "ram": self.ram_history.get_all(),
                 "temperature": self.temperature_history.get_all(),
+                "gpu": self.gpu_history.get_all(),
+                "latency": self.latency_history.get_all(),
+                "processing_time": self.processing_time_history.get_all(),
+                "detector_time": self.detector_time_history.get_all(),
+                "encoding_time": self.encoding_time_history.get_all(),
+            },
+            "engine": {
+                "advisor": __import__("services.performance_engine").performance_engine.performance_engine.get_advisor_messages(),
+                "logs": __import__("services.performance_engine").performance_engine.performance_engine.get_optimization_log()
             },
             "stats": {
                 "fps_avg": self.fps_history.get_average(),
@@ -254,6 +300,11 @@ class AnalyticsService:
                 "ram_max": self.ram_history.get_max(),
                 "temp_avg": self.temperature_history.get_average(),
                 "temp_max": self.temperature_history.get_max(),
+                "gpu_avg": self.gpu_history.get_average(),
+                "latency_avg": self.latency_history.get_average(),
+                "processing_time_avg": self.processing_time_history.get_average(),
+                "detector_time_avg": self.detector_time_history.get_average(),
+                "encoding_time_avg": self.encoding_time_history.get_average(),
             },
             "counters": {
                 "snapshots": self.snapshot_count,
@@ -262,6 +313,11 @@ class AnalyticsService:
                 "qr_detections": self.qr_detections,
                 "camera_restarts": self.camera_restarts,
                 "recording_duration_seconds": self.recording_duration,
+                "camera_uptime": __import__("services.system_monitor").system_monitor.system_monitor.get_uptime() if hasattr(__import__("services.system_monitor"), 'system_monitor') else 0.0,
+                "dropped_frames": __import__("camera.manager").camera_manager.camera_manager.dropped_frames if hasattr(__import__("camera.manager"), 'camera_manager') else 0,
+                "raw_queue_size": __import__("camera.manager").camera_manager.camera_manager.raw_queue.qsize() if hasattr(__import__("camera.manager"), 'camera_manager') else 0,
+                "encode_queue_size": __import__("camera.manager").camera_manager.camera_manager.encode_queue.qsize() if hasattr(__import__("camera.manager"), 'camera_manager') else 0,
+                "queue_wait_ms": __import__("camera.manager").camera_manager.camera_manager.queue_wait_time if hasattr(__import__("camera.manager"), 'camera_manager') else 0.0,
             }
         }
     
@@ -271,6 +327,11 @@ class AnalyticsService:
         self.cpu_history.clear()
         self.ram_history.clear()
         self.temperature_history.clear()
+        self.gpu_history.clear()
+        self.latency_history.clear()
+        self.processing_time_history.clear()
+        self.detector_time_history.clear()
+        self.encoding_time_history.clear()
         self.snapshot_count = 0
         self.motion_events = 0
         self.face_detections = 0

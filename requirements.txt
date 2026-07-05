@@ -1,12 +1,25 @@
-Flask==3.0.0
-opencv-python==4.8.1.78
-numpy==1.24.3
-psutil==5.9.5
-python-dotenv==1.0.0
-Werkzeug==3.0.0
-Jinja2==3.1.2
-click==8.1.7
-itsdangerous==2.1.2
-MarkupSafe==2.1.3
-pyzbar==0.1.9
-Pillow==10.0.0
+# Flask web framework
+Flask>=3.0,<4.0
+Werkzeug>=3.0,<4.0
+Jinja2>=3.1,<4.0
+click>=8.1,<9.0
+itsdangerous>=2.1,<3.0
+MarkupSafe>=2.1,<3.0
+
+# OpenCV (CPU-only, no CUDA required)
+opencv-python>=4.8,<5.0
+
+# Numerical computing
+numpy>=1.24
+
+# System monitoring
+psutil>=5.9
+
+# Environment variables
+python-dotenv>=1.0
+
+# Image processing
+Pillow>=10.0
+
+# QR code detection (optional — gracefully skipped if unavailable)
+pyzbar>=0.1.9
