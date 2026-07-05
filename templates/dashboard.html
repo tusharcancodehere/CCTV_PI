@@ -1,0 +1,236 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>OpenCV Vision Dashboard</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+</head>
+<body>
+    <div class="container">
+        <!-- Header -->
+        <header class="header">
+            <div class="header-left">
+                <h1>OpenCV Live Vision</h1>
+            </div>
+            <div class="header-right">
+                <div class="status-indicator">
+                    <span id="connection-status" class="status-dot"></span>
+                    <span id="status-text">Connecting...</span>
+                </div>
+            </div>
+        </header>
+
+        <div class="main-wrapper">
+            <!-- Sidebar -->
+            <aside class="sidebar">
+                <nav class="nav">
+                    <a href="#dashboard" class="nav-item active" data-section="dashboard">
+                        <span class="icon">🎥</span>
+                        <span class="label">Dashboard</span>
+                    </a>
+                    <a href="#camera" class="nav-item" data-section="camera">
+                        <span class="icon">📹</span>
+                        <span class="label">Camera</span>
+                    </a>
+                    <a href="#recording" class="nav-item" data-section="recording">
+                        <span class="icon">⏺️</span>
+                        <span class="label">Recording</span>
+                    </a>
+                    <a href="#snapshots" class="nav-item" data-section="snapshots">
+                        <span class="icon">📸</span>
+                        <span class="label">Snapshots</span>
+                    </a>
+                    <a href="#system" class="nav-item" data-section="system">
+                        <span class="icon">📊</span>
+                        <span class="label">System</span>
+                    </a>
+                    <a href="#logs" class="nav-item" data-section="logs">
+                        <span class="icon">📋</span>
+                        <span class="label">Logs</span>
+                    </a>
+                    <a href="#settings" class="nav-item" data-section="settings">
+                        <span class="icon">⚙️</span>
+                        <span class="label">Settings</span>
+                    </a>
+                </nav>
+            </aside>
+
+            <!-- Main Content -->
+            <main class="content">
+                <!-- Dashboard Section -->
+                <section id="dashboard-section" class="section active">
+                    <div class="video-container">
+                        <img id="video-feed" src="/video_feed" alt="Live Video Feed" class="video-feed">
+                        <div id="loading" class="loading">Loading stream...</div>
+                    </div>
+                    
+                    <div class="controls-panel">
+                        <button id="btn-camera-start" class="btn btn-primary">Start Camera</button>
+                        <button id="btn-camera-stop" class="btn btn-danger">Stop Camera</button>
+                        <button id="btn-camera-restart" class="btn btn-warning">Restart Camera</button>
+                        <button id="btn-snapshot" class="btn btn-success">Capture Snapshot</button>
+                        <button id="btn-fullscreen" class="btn btn-info">Fullscreen</button>
+                    </div>
+
+                    <div class="stats-panel">
+                        <div class="stat">
+                            <span class="stat-label">FPS</span>
+                            <span id="stat-fps" class="stat-value">0</span>
+                        </div>
+                        <div class="stat">
+                            <span class="stat-label">CPU</span>
+                            <span id="stat-cpu" class="stat-value">0%</span>
+                        </div>
+                        <div class="stat">
+                            <span class="stat-label">RAM</span>
+                            <span id="stat-ram" class="stat-value">0%</span>
+                        </div>
+                        <div class="stat">
+                            <span class="stat-label">Resolution</span>
+                            <span id="stat-resolution" class="stat-value">-</span>
+                        </div>
+                    </div>
+                </section>
+
+                <!-- Camera Section -->
+                <section id="camera-section" class="section">
+                    <h2>Camera Controls</h2>
+                    <div class="controls-grid">
+                        <div class="control-group">
+                            <label>Brightness</label>
+                            <input type="range" id="brightness" min="-100" max="100" value="0" class="slider">
+                            <span id="brightness-value">0</span>
+                        </div>
+                        <div class="control-group">
+                            <label>Contrast</label>
+                            <input type="range" id="contrast" min="0.5" max="3.0" step="0.1" value="1.0" class="slider">
+                            <span id="contrast-value">1.0</span>
+                        </div>
+                        <div class="control-group">
+                            <label>Saturation</label>
+                            <input type="range" id="saturation" min="0" max="2.0" step="0.1" value="1.0" class="slider">
+                            <span id="saturation-value">1.0</span>
+                        </div>
+                    </div>
+                </section>
+
+                <!-- Recording Section -->
+                <section id="recording-section" class="section">
+                    <h2>Recording</h2>
+                    <div class="recording-controls">
+                        <button id="btn-recording-start" class="btn btn-success">Start Recording</button>
+                        <button id="btn-recording-stop" class="btn btn-danger" disabled>Stop Recording</button>
+                        <div id="recording-info" class="recording-info" style="display:none;">
+                            <span>Recording: <span id="recording-duration">0s</span></span>
+                        </div>
+                    </div>
+                </section>
+
+                <!-- Snapshots Section -->
+                <section id="snapshots-section" class="section">
+                    <h2>Snapshots</h2>
+                    <div id="snapshots-grid" class="snapshots-grid">
+                        <p>No snapshots yet</p>
+                    </div>
+                </section>
+
+                <!-- System Section -->
+                <section id="system-section" class="section">
+                    <h2>System Monitor</h2>
+                    <div id="system-info" class="system-info">
+                        <p>Loading system information...</p>
+                    </div>
+                </section>
+
+                <!-- Logs Section -->
+                <section id="logs-section" class="section">
+                    <h2>Event Logs</h2>
+                    <div id="logs-container" class="logs-container">
+                        <p>No logs yet</p>
+                    </div>
+                </section>
+
+                <!-- Settings Section -->
+                <section id="settings-section" class="section">
+                    <h2>Settings</h2>
+                    <div class="settings-grid">
+                        <div class="setting-group">
+                            <label>
+                                <input type="checkbox" id="enable-motion-detection" checked>
+                                Enable Motion Detection
+                            </label>
+                        </div>
+                        <div class="setting-group">
+                            <label>
+                                <input type="checkbox" id="enable-face-detection" checked>
+                                Enable Face Detection
+                            </label>
+                        </div>
+                        <div class="setting-group">
+                            <label>
+                                <input type="checkbox" id="enable-qr-detection" checked>
+                                Enable QR Detection
+                            </label>
+                        </div>
+                        
+                        <div class="setting-group select-group">
+                            <label for="setting-resolution">Resolution Mode</label>
+                            <select id="setting-resolution" class="select-input">
+                                <option value="LOW">LOW (320x240) - Pi-safe</option>
+                                <option value="BALANCED" selected>BALANCED (640x480) - recommended</option>
+                                <option value="HIGH">HIGH (1280x720) - desktop recommended</option>
+                                <option value="ULTRA">ULTRA (1920x1080) - experimental</option>
+                            </select>
+                        </div>
+                        
+                        <div class="setting-group select-group">
+                            <label for="setting-fps">Frame Rate (FPS)</label>
+                            <select id="setting-fps" class="select-input">
+                                <option value="15">15 FPS (Pi default)</option>
+                                <option value="20">20 FPS</option>
+                                <option value="25">25 FPS</option>
+                                <option value="30" selected>30 FPS (Desktop default)</option>
+                            </select>
+                        </div>
+                        
+                        <div class="setting-group select-group">
+                            <label for="setting-device-profile">Device Profile (for estimation)</label>
+                            <select id="setting-device-profile" class="select-input">
+                                <option value="auto">Auto-Detect</option>
+                                <option value="Raspberry Pi 4 (1GB)">Raspberry Pi 4 (1GB)</option>
+                                <option value="Raspberry Pi 5">Raspberry Pi 5</option>
+                                <option value="Low-end laptop">Low-end laptop</option>
+                                <option value="High-end laptop">High-end laptop</option>
+                            </select>
+                        </div>
+                        
+                        <!-- Performance Preview Panel -->
+                        <div id="performance-preview-panel" class="performance-preview-panel" style="display: none; width: 100%; grid-column: 1 / -1;">
+                            <h3>Performance & System Impact Preview</h3>
+                            <div class="preview-stats">
+                                <p><strong>Estimated FPS:</strong> <span id="preview-fps">-</span></p>
+                                <p><strong>Estimated CPU:</strong> <span id="preview-cpu">-</span></p>
+                                <p><strong>Estimated RAM:</strong> <span id="preview-ram">-</span></p>
+                                <p><strong>Frame Processing Time:</strong> <span id="preview-frame-time">-</span></p>
+                                <p><strong>Camera Warm-up Time:</strong> <span id="preview-warmup">-</span></p>
+                                <p><strong>Stability Rating:</strong> <span id="preview-stability">-</span></p>
+                            </div>
+                            <div id="preview-warning" class="preview-warning" style="display: none;"></div>
+                            <div class="preview-actions">
+                                <button id="btn-apply-settings" class="btn btn-primary">Apply Settings</button>
+                                <button id="btn-suggest-settings" class="btn btn-info">Auto-Suggest Settings</button>
+                            </div>
+                        </div>
+                    </div>
+                </section>
+            </main>
+        </div>
+    </div>
+
+    <!-- Watermark -->
+    <div class="watermark">Made by TusharCodeHere</div>
+
+    <script src="{{ url_for('static', filename='js/app.js') }}"></script>
+</body>
+</html>
